@@ -213,7 +213,19 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          ctest --test-dir build --output-on-failure 2>&1 | tee ctest_output.log
+          SKIP_FILE=".github/build_tools/skip_tests_${{ matrix.gpu_config.gpu_target }}.txt"
+          if [ -f "${SKIP_FILE}" ]; then
+            echo "## Skipped tests" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat "${SKIP_FILE}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            ctest --test-dir build --output-on-failure --exclude-from-file "${SKIP_FILE}" 2>&1 | tee ctest_output.log
+          else
+            ctest --test-dir build --output-on-failure 2>&1 | tee ctest_output.log
+          fi
 
       - name: Test summary
         if: ${{ !cancelled() }}
@@ -236,6 +248,13 @@ jobs:
                     
           # Show failed tests if any
           if [ "${FAILED}" -gt 0 ]; then
+            echo "## Failed tests" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat build/Testing/Temporary/LastTestsFailed.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
             echo "<details><summary>Failed tests output</summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
