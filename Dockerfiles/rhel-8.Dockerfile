@@ -2,6 +2,7 @@ FROM almalinux:8
 
 ARG VULKAN_SDK_VERSION=1.4.335.0
 ARG GLFW_VERSION=3.4
+ARG GLSLANG_VERSION=13.1.1
 
 # GPU_TARGET and THEROCK_FAMILY are set at workflow runtime, not in the base image
 ENV VULKAN_SDK_VERSION=${VULKAN_SDK_VERSION}
@@ -53,14 +54,26 @@ RUN wget https://github.com/glfw/glfw/releases/download/${GLFW_VERSION}/glfw-${G
     cmake --build glfw-${GLFW_VERSION}/build --target install && \
     rm -rf /tmp/glfw-${GLFW_VERSION}*
 
-# Install Vulkan SDK
+# Build glslang from source (Vulkan SDK prebuilt binaries require glibc 2.34+,
+# but RHEL 8 ships glibc 2.28)
+RUN git clone --branch ${GLSLANG_VERSION} --depth 1 https://github.com/KhronosGroup/glslang.git && \
+    cmake -S glslang -B glslang/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_OPT=OFF \
+        -DENABLE_CTEST=OFF && \
+    cmake --build glslang/build -j$(nproc) --target glslang-standalone && \
+    cp glslang/build/StandAlone/glslang /usr/local/bin/glslangValidator && \
+    rm -rf /tmp/glslang
+
+# Install Vulkan SDK (headers, libraries, and layers — prebuilt CLI tools are
+# superseded by the glslang build above via PATH ordering)
 ENV VULKAN_SDK=/opt/vulkan-sdk/${VULKAN_SDK_VERSION}/x86_64
 RUN mkdir -p /opt/vulkan-sdk && \
     wget https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz && \
     tar -xvf vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz -C /opt/vulkan-sdk && \
     rm vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
 
-ENV PATH="${VULKAN_SDK}/bin:${PATH}"
+ENV PATH="/usr/local/bin:${VULKAN_SDK}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${VULKAN_SDK}/lib"
 ENV VK_ADD_LAYER_PATH="${VULKAN_SDK}/share/vulkan/explicit_layer.d"
 ENV PKG_CONFIG_PATH="${VULKAN_SDK}/share/pkgconfig:${VULKAN_SDK}/lib/pkgconfig"
