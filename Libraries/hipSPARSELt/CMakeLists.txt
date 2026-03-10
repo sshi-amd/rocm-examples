@@ -27,16 +27,6 @@ include(CTest)
 file(RELATIVE_PATH folder_bin ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/${folder_bin})
 
-# see https://github.com/ROCm/rocm-libraries/blob/40bbc75960836d1b9e0573606df9dd79800e412a/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake#L10-L21
-set(HIPSPARSELT_SUPPORTED_ARCH gfx942 gfx950)
-
-foreach(ARCH ${CMAKE_HIP_ARCHITECTURES})
-    if(NOT ARCH IN_LIST HIPSPARSELT_SUPPORTED_ARCH)
-        message(WARNING "hipSPARSELt does not support architecture: ${ARCH}, not building hipSPARSELt examples")
-        return()
-    endif()
-endforeach()
-
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     set(ROCM_ROOT
         "$ENV{HIP_PATH}"
@@ -54,13 +44,20 @@ endif()
 list(APPEND CMAKE_PREFIX_PATH "${ROCM_ROOT}")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    message(STATUS "The hipSPARSELt examples are available on Linux only.")
+    message(WARNING "The hipSPARSELt examples are available on Linux only.")
 else()
     find_package(hipsparselt QUIET)
-    
+
     if(NOT hipsparselt_FOUND)
         message(WARNING "hipSPARSELt could not be found, not building hipSPARSELt examples")
     else()
+        hipsparselt_get_supported_architectures(HIPSPARSELT_SUPPORTED_ARCH)
+        include("${CMAKE_CURRENT_LIST_DIR}/../../Common/FilterHIPArchitectures.cmake")
+        filter_hip_architectures("hipSPARSELt examples" "${HIPSPARSELT_SUPPORTED_ARCH}" SHOULD_SKIP)
+        if(SHOULD_SKIP)
+            return()
+        endif()
+
         add_subdirectory(spmm)
         add_subdirectory(spmm_advanced)
     endif()

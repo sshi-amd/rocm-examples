@@ -35,15 +35,6 @@ select_gpu_language()
 enable_language(${ROCM_EXAMPLES_GPU_LANGUAGE})
 select_hip_platform()
 
-# see https://github.com/ROCm/rocm-libraries/blob/40bbc75960836d1b9e0573606df9dd79800e412a/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake#L10-L21
-set(HIPSPARSELT_SUPPORTED_ARCH gfx942 gfx950)
-
-foreach(ARCH ${CMAKE_HIP_ARCHITECTURES})
-    if(NOT ARCH IN_LIST HIPSPARSELT_SUPPORTED_ARCH)
-        message(FATAL_ERROR "hipSPARSELt does not support architecture: ${ARCH}, not building hipSPARSELt examples")
-    endif()
-endforeach()
-
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     set(ROCM_ROOT
         "$ENV{HIP_PATH}"
@@ -62,6 +53,13 @@ list(APPEND CMAKE_PREFIX_PATH "${ROCM_ROOT}")
 
 find_package(hip REQUIRED)
 find_package(hipsparselt REQUIRED)
+
+hipsparselt_get_supported_architectures(HIPSPARSELT_SUPPORTED_ARCH)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../Common/FilterHIPArchitectures.cmake")
+filter_hip_architectures("hipSPARSELt spmm_advanced" "${HIPSPARSELT_SUPPORTED_ARCH}" SHOULD_SKIP)
+if(SHOULD_SKIP)
+    return()
+endif()
 
 add_executable(${example_name} main.cpp)
 # Make example runnable using CTest

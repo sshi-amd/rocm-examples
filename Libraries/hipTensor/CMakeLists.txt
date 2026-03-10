@@ -27,18 +27,8 @@ include(CTest)
 file(RELATIVE_PATH folder_bin ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/${folder_bin})
 
-# see https://rocm.docs.amd.com/projects/hipTensor/en/latest/install/installation.html#gpu-support
-set(HIPTENSOR_SUPPORTED_ARCH gfx908 gfx90a gfx942 gfx950)
-
-foreach(ARCH ${CMAKE_HIP_ARCHITECTURES})
-    if(NOT ARCH IN_LIST HIPTENSOR_SUPPORTED_ARCH)
-        message(WARNING "hipTensor does not support architecture: ${ARCH}, not building hipTensor examples")
-        return()
-    endif()
-endforeach()
-
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-    message(STATUS "hipTensor examples are only available on Linux")
+    message(WARNING "hipTensor examples are only available on Linux")
     return()
 else()
     set(ROCM_ROOT
@@ -58,6 +48,23 @@ if(NOT hiptensor_FOUND)
     )
     return()
 endif()
+
+set(HIPTENSOR_SUPPORTED_ARCH)
+foreach(ARCH ${CMAKE_HIP_ARCHITECTURES})
+    hiptensor_is_supported_architecture(${ARCH} IS_SUPPORTED)
+    if(IS_SUPPORTED)
+        list(APPEND HIPTENSOR_SUPPORTED_ARCH ${ARCH})
+    else()
+        message(WARNING "hipTensor does not support architecture: ${ARCH}")
+    endif()
+endforeach()
+
+if(NOT HIPTENSOR_SUPPORTED_ARCH)
+    message(WARNING "No supported architectures found, not building hipTensor examples")
+    return()
+endif()
+
+set(CMAKE_HIP_ARCHITECTURES ${HIPTENSOR_SUPPORTED_ARCH})
 
 add_subdirectory(contraction)
 add_subdirectory(elementwise)
