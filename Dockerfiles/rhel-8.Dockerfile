@@ -29,7 +29,8 @@ RUN dnf install -y dnf-plugins-core && \
         libXcursor-devel \
         libXi-devel \
         libXinerama-devel \
-        libXrandr-devel && \
+        libXrandr-devel \
+        libatomic && \
     dnf clean all
 
 # ============================================================================
@@ -66,15 +67,15 @@ RUN git clone --branch ${GLSLANG_VERSION} --depth 1 https://github.com/KhronosGr
     cp glslang/build/StandAlone/glslang /usr/local/bin/glslangValidator && \
     rm -rf /tmp/glslang
 
-# Install Vulkan SDK (headers, libraries, and layers — prebuilt CLI tools are
-# superseded by the glslang build above via PATH ordering)
+# Install Vulkan SDK (headers, libraries, and layers)
 ENV VULKAN_SDK=/opt/vulkan-sdk/${VULKAN_SDK_VERSION}/x86_64
 RUN mkdir -p /opt/vulkan-sdk && \
     wget https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz && \
     tar -xvf vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz -C /opt/vulkan-sdk && \
-    rm vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+    rm vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz && \
+    cp /usr/local/bin/glslangValidator ${VULKAN_SDK}/bin/glslangValidator
 
-ENV PATH="/usr/local/bin:${VULKAN_SDK}/bin:${PATH}"
+ENV PATH="${VULKAN_SDK}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${VULKAN_SDK}/lib"
 ENV VK_ADD_LAYER_PATH="${VULKAN_SDK}/share/vulkan/explicit_layer.d"
 ENV PKG_CONFIG_PATH="${VULKAN_SDK}/share/pkgconfig:${VULKAN_SDK}/lib/pkgconfig"
