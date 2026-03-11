@@ -1,14 +1,16 @@
-FROM registry.suse.com/suse/sle15:15.7
+FROM almalinux:8
 
 ARG VULKAN_SDK_VERSION=1.4.335.0
 ARG GLFW_VERSION=3.4
+ARG GLSLANG_VERSION=13.1.1
 
 # GPU_TARGET and THEROCK_FAMILY are set at workflow runtime, not in the base image
 ENV VULKAN_SDK_VERSION=${VULKAN_SDK_VERSION}
 
-RUN zypper -qni update -y && \
-    zypper -qni install -y \
-        awk \
+RUN dnf install -y dnf-plugins-core && \
+    dnf config-manager --set-enabled powertools && \
+    dnf update -y && \
+    dnf install -y \
         unzip \
         xz \
         gcc \
@@ -18,32 +20,32 @@ RUN zypper -qni update -y && \
         git \
         curl \
         nasm \
-        python313 \
-        libdw-devel \
-        Mesa-libGL-devel \
+        python3.11 \
+        python3.11-pip \
+        elfutils-devel \
+        mesa-libGL-devel \
         wayland-devel \
         libxkbcommon-devel \
         libXcursor-devel \
         libXi-devel \
         libXinerama-devel \
-        libXrandr-devel && \
-    zypper clean -a
+        libXrandr-devel \
+        libatomic && \
+    dnf clean all
 
 # ============================================================================
 # Python virtual environment (ready for ROCm wheel or tarball installation)
 # ROCm installation is delegated to the CI workflow to support both methods
 # ============================================================================
 
-# Create virtual environment with base packages
-RUN python3.13 -m venv /opt/venv && \
+RUN python3.11 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip install pyyaml cmake
 
-# Set up virtual environment in PATH
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV VIRTUAL_ENV="/opt/venv"
 
-# Build GLFW from source (not available in SLES repos)
+# Build GLFW from source (not available in RHEL 8 repos)
 WORKDIR /tmp
 RUN wget https://github.com/glfw/glfw/releases/download/${GLFW_VERSION}/glfw-${GLFW_VERSION}.zip && \
     unzip glfw-${GLFW_VERSION}.zip && \
@@ -54,19 +56,31 @@ RUN wget https://github.com/glfw/glfw/releases/download/${GLFW_VERSION}/glfw-${G
     cmake --build glfw-${GLFW_VERSION}/build --target install && \
     rm -rf /tmp/glfw-${GLFW_VERSION}*
 
-# Install Vulkan SDK
+# Build glslang from source (Vulkan SDK prebuilt binaries require glibc 2.34+,
+# but RHEL 8 ships glibc 2.28)
+RUN git clone --branch ${GLSLANG_VERSION} --depth 1 https://github.com/KhronosGroup/glslang.git && \
+    cmake -S glslang -B glslang/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_OPT=OFF \
+        -DENABLE_CTEST=OFF && \
+    cmake --build glslang/build -j$(nproc) --target glslang-standalone && \
+    cp glslang/build/StandAlone/glslang /usr/local/bin/glslangValidator && \
+    rm -rf /tmp/glslang
+
+# Install Vulkan SDK (headers, libraries, and layers)
 ENV VULKAN_SDK=/opt/vulkan-sdk/${VULKAN_SDK_VERSION}/x86_64
 RUN mkdir -p /opt/vulkan-sdk && \
     wget https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz && \
     tar -xvf vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz -C /opt/vulkan-sdk && \
-    rm vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+    rm vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz && \
+    cp /usr/local/bin/glslangValidator ${VULKAN_SDK}/bin/glslangValidator
 
 ENV PATH="${VULKAN_SDK}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${VULKAN_SDK}/lib"
 ENV VK_ADD_LAYER_PATH="${VULKAN_SDK}/share/vulkan/explicit_layer.d"
 ENV PKG_CONFIG_PATH="${VULKAN_SDK}/share/pkgconfig:${VULKAN_SDK}/lib/pkgconfig"
 
-# build ffmpeg from source
+# Build FFmpeg from source (not available in RHEL 8 repos)
 WORKDIR /tmp
 RUN wget https://ffmpeg.org/releases/ffmpeg-4.4.6.tar.xz && \
     tar -xvf ffmpeg-4.4.6.tar.xz && \

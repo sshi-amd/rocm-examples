@@ -37,3 +37,4 @@ Dockerfiles:
 
 - [ubuntu-22.04.Dockerfile](ubuntu-22.04.Dockerfile)
 - [sles-15.7.Dockerfile](sles-15.7.Dockerfile)
+- [rhel-8.Dockerfile](rhel-8.Dockerfile)
